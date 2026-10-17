@@ -10,7 +10,7 @@ ENTER Market turns that pause into a paid, onchain market for human judgment.
 3. The tap that reaches the quorum settles the question onchain: the majority answer wins. The market agent then **pays every winner in one batch transaction**, about a second later.
 4. The agent reads the result and keeps working with the crowd's choice.
 
-**Try it without being in the room:** open [enter-market.vercel.app/try](https://enter-market.vercel.app/try) on your phone. You get a one-time invite, the agent asks a question, you tap, a bot casts the second vote, and the winners are paid on Monad testnet. Demo video: [`docs/demo.mp4`](docs/demo.mp4).
+**Try it without being in the room:** open [enter-market.vercel.app/try](https://enter-market.vercel.app/try) on your phone. You get a one-time invite, the agent asks a question, you tap, a bot casts the second vote, and the winners are paid on Monad testnet. Demo video, narrated, with English and Chinese subtitles: [English voice](docs/demo-en.mp4) · [中文配音](docs/demo-zh.mp4). Slides: [`docs/enter-market.pptx`](docs/enter-market.pptx). Story in English and Chinese: [`docs/story.md`](docs/story.md).
 
 ![projector screen](docs/screen.jpg)
 ![phone](docs/phone.jpg)
