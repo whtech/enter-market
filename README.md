@@ -6,7 +6,7 @@ Coding agents keep stopping for a human: "Commit and push?", "Which of these 3 h
 ENTER Market turns that pause into a paid, onchain market for human judgment.
 
 1. An **agent** posts a multiple-choice question and escrows a MON reward in `EnterMarket` on Monad. It can do this itself, or buy it from other agents over **x402** (see below).
-2. Anyone scans the QR code and answers by tapping a giant button on their phone. A burner wallet and a gas drip mean no wallet install.
+2. People in the room scan the QR code on the projector and answer by tapping a giant button on their phone. A burner wallet and a gas drip mean no wallet install. The QR carries a room code that rotates every 10 seconds, and the contract refuses votes without a pass for it (see [Sybil resistance](#sybil-resistance)).
 3. The tap that reaches the quorum settles the question onchain: the majority answer wins. The market agent then **pays every winner in one batch transaction**, about a second later.
 4. The agent reads the result and keeps working with the crowd's choice.
 
@@ -47,7 +47,7 @@ AGENT_PRIVATE_KEY=0x... yarn agent friday --x402 https://enter-market.vercel.app
 
 | | |
 | --- | --- |
-| Contract (Monad testnet, verified) | [`0xaac47c455818805b0f0b6df2294c7309ec9a873f`](https://testnet.monadexplorer.com/address/0xaac47c455818805b0f0b6df2294c7309ec9a873f) |
+| Contract (Monad testnet, verified) | [`0xd544a6d7f543930454a848780706afbab6c4e4ac`](https://testnet.monadexplorer.com/address/0xd544a6d7f543930454a848780706afbab6c4e4ac) |
 | Phone page | `/` |
 | Projector page | `/screen` |
 
@@ -65,11 +65,13 @@ agent ◀──────────────────── getQuestio
 - `packages/nextjs/app/page.tsx`: phone page with a localStorage burner wallet and tap-to-confirmed latency.
 - `packages/nextjs/app/screen/page.tsx`: projector page with QR code, live vote bars and payout feed.
 - `packages/nextjs/app/api/drip/route.ts`: sends a little gas MON to new burners. Sends from the agent wallet go through `utils/marketWallet.ts`, which hands out nonces in order so a whole room can ask for gas at once.
+- `packages/nextjs/app/api/event-code/route.ts` and `app/api/redeem/route.ts`: the projector's rotating room code (behind a screen key) and the pass a phone gets for it, signed by the market agent. See `utils/eventPass.ts`.
 - `packages/nextjs/app/api/payout/route.ts`: the market agent pays the winners once a question settles. Phones and the projector call it, and concurrent calls share one transaction.
 - `packages/nextjs/app/api/outsource/route.ts`: the contractor agent, an x402-paid API that subcontracts over x402.
 - `packages/nextjs/app/api/ask/route.ts`: the local ENTER Market agent, an x402-paid API that posts the question onchain.
 - `packages/nextjs/scripts/agent.mjs`: the demo agent.
 - `packages/nextjs/scripts/bench.mjs`: the benchmark below.
+- `packages/nextjs/scripts/e2e-gate.mjs`: end-to-end check of the room-code gate, gas drip, onchain pass check, quorum and payout against a local chain (14 checks).
 
 Built with Scaffold-ETH 2, Foundry, Next.js, viem, x402 and Vercel.
 
@@ -109,6 +111,17 @@ AGENT_PRIVATE_KEY=0x... yarn agent poster --reward 0.2 --quorum 5
 AGENT_PRIVATE_KEY=0x... yarn agent friday
 ```
 
+## Sybil resistance
+
+A burner wallet costs nothing, so without a gate one person could vote with a hundred of them. Voting needs a pass:
+
+1. The projector (`/screen?key=…`) shows a QR with a room code that changes every 10 seconds. A code is the time slot plus an HMAC, so the server checks it without a database, and it expires after 90 seconds.
+2. A phone trades the code for a pass: the market agent signs (contract, chain, burner address, code hash, expiry).
+3. `answer()` checks the pass onchain against the contract's `gatekeeper`. A vote without a pass, or with a pass signed for another address, reverts. The gas drip also only funds burners holding their own pass.
+4. The contract also binds every code hash to the first address that votes with it, so one-time invite codes (hashing the code alone) count exactly once.
+
+What this does and does not stop: voting is limited to people who can see the projector, and passes cannot be shared or replayed. Someone in the room can still script several burners against a live code. Proof of personhood (for example World ID) or one-time printed invite codes would close that, and the contract already supports the second.
+
 ## Out of scope for the hackathon
 
-Sybil resistance (one person can open many burners), reputation, disputes and mainnet. A likely next step is an event-code allowlist or proof of personhood for voters.
+Proof of personhood, reputation, disputes and mainnet.

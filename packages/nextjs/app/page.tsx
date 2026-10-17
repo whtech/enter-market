@@ -31,8 +31,24 @@ function loadBurnerKey(): `0x${string}` {
   }
 }
 
+// A voting pass from /api/redeem, bound to this burner and to the event code it scanned (see EnterMarket._checkPass).
+type Pass = { codeHash: `0x${string}`; expiry: number; signature: `0x${string}` };
+const passKey = (voter: string) => `enter-market-pass:${ENTER_MARKET_ADDRESS}:${voter}`.toLowerCase();
+
+function loadPass(voter: string): Pass | null {
+  try {
+    const saved = JSON.parse(localStorage.getItem(passKey(voter)) ?? "null") as Pass | null;
+    return saved && saved.expiry > Date.now() / 1000 ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
 // measured outside the component so the React compiler does not treat it as render work
 const elapsedSince = (start?: number) => Math.round(performance.now() - (start ?? 0));
+
+// covers settling the question (EnterMarket._decide) on top of a plain answer; Monad charges for the whole limit
+const SETTLE_HEADROOM = 60_000n;
 
 type Tap = { option: number; hash?: `0x${string}`; ms?: number; error?: string };
 
@@ -44,6 +60,11 @@ const Home: NextPage = () => {
   const [tap, setTap] = useState<Tap>();
   const [now, setNow] = useState(() => Date.now());
   const payoutRequested = useRef<bigint>(-1n);
+  // undefined while checking, null when this phone still has to scan an event code
+  const [pass, setPass] = useState<Pass | null>();
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string>();
+  const [codeInput, setCodeInput] = useState("");
 
   useEffect(() => setKey(loadBurnerKey()), []);
 
@@ -53,10 +74,47 @@ const Home: NextPage = () => {
     [account],
   );
 
+  const redeem = useCallback(
+    async (code: string) => {
+      if (!account) return;
+      setJoining(true);
+      setJoinError(undefined);
+      try {
+        const res = await fetch("/api/redeem", {
+          method: "POST",
+          body: JSON.stringify({ code, address: account.address }),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error ?? "could not join");
+        try {
+          localStorage.setItem(passKey(account.address), JSON.stringify(body));
+        } catch {
+          // private mode: the pass lasts until the tab closes
+        }
+        setPass(body);
+        window.history.replaceState(null, "", window.location.pathname);
+      } catch (e) {
+        setJoinError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setJoining(false);
+      }
+    },
+    [account],
+  );
+
   useEffect(() => {
     if (!account) return;
-    fetch("/api/drip", { method: "POST", body: JSON.stringify({ address: account.address }) }).catch(() => {});
-  }, [account]);
+    const saved = loadPass(account.address);
+    setPass(saved);
+    const code = new URLSearchParams(window.location.search).get("code");
+    if (!saved && code) redeem(code);
+  }, [account, redeem]);
+
+  // gas only comes with a pass, so a sybil's extra burners stay empty
+  useEffect(() => {
+    if (!account || !pass) return;
+    fetch("/api/drip", { method: "POST", body: JSON.stringify({ address: account.address, pass }) }).catch(() => {});
+  }, [account, pass]);
 
   const refresh = useCallback(async () => {
     if (!account) return;
@@ -93,16 +151,20 @@ const Home: NextPage = () => {
   useEffect(() => setTap(undefined), [question?.id]);
 
   const press = async (option: number) => {
-    if (!wallet || !question || tap) return;
+    if (!wallet || !question || !pass || tap) return;
     setTap({ option });
     const started = elapsedSince();
     try {
-      const hash = await wallet.writeContract({
+      const call = {
         address: ENTER_MARKET_ADDRESS,
         abi: ENTER_MARKET_ABI,
         functionName: "answer",
-        args: [question.id, option],
-      });
+        args: [question.id, option, pass.codeHash, BigInt(pass.expiry), pass.signature],
+      } as const;
+      // the estimate is taken before the neighbours' taps land; if this one turns out to reach the quorum it also
+      // settles the question, so leave room for that or it runs out of gas
+      const gas = (await publicClient.estimateContractGas({ ...call, account: wallet.account })) + SETTLE_HEADROOM;
+      const hash = await wallet.writeContract({ ...call, gas });
       await publicClient.waitForTransactionReceipt({ hash, pollingInterval: 100 });
       setTap({ option, hash, ms: elapsedSince(started) });
       refresh().catch(() => {});
@@ -125,10 +187,36 @@ const Home: NextPage = () => {
         <span>{balance !== undefined ? `${Number(formatEther(balance)).toFixed(4)} MON` : "…"}</span>
       </div>
 
-      {question === undefined && <p className="m-auto text-white/60">Loading…</p>}
-      {question === null && <p className="m-auto text-center px-6 text-white/60">Waiting for the agent to ask…</p>}
+      {pass === null && (
+        <div className="m-auto w-full max-w-sm px-6 text-center flex flex-col gap-4">
+          <h1 className="text-3xl font-bold">Join the room</h1>
+          <p className="text-white/60">
+            Scan the QR code on the big screen, or type the code under it. Only phones in the room can vote.
+          </p>
+          <input
+            value={codeInput}
+            onChange={e => setCodeInput(e.target.value.toUpperCase())}
+            placeholder="ABC12-XYZ789"
+            autoCapitalize="characters"
+            className="rounded-xl bg-white/10 border border-white/20 px-4 py-3 text-xl font-mono text-center"
+          />
+          <button
+            disabled={joining || !codeInput}
+            onClick={() => redeem(codeInput)}
+            className="rounded-2xl bg-[#836EF9] text-2xl font-bold py-4 disabled:opacity-40"
+          >
+            {joining ? "Joining…" : "Join"}
+          </button>
+          {joinError && <p className="text-red-400 text-sm">{joinError}</p>}
+        </div>
+      )}
+      {pass === undefined && <p className="m-auto text-white/60">{joining ? "Joining…" : "Loading…"}</p>}
+      {pass && question === undefined && <p className="m-auto text-white/60">Loading…</p>}
+      {pass && question === null && (
+        <p className="m-auto text-center px-6 text-white/60">Waiting for the agent to ask…</p>
+      )}
 
-      {question && (
+      {pass && question && (
         <div className="flex flex-col flex-1 px-4 pb-6">
           <p className="text-sm text-[#836EF9] font-mono mt-6">
             Agent asks · {formatEther(question.reward)} MON · {question.answerCount}/{question.quorum} answers

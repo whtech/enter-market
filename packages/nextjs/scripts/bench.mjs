@@ -14,12 +14,14 @@ import { fileURLToPath } from "node:url";
 import {
   createPublicClient,
   createWalletClient,
+  encodeAbiParameters,
   encodeFunctionData,
   formatEther,
   http,
   keccak256,
   parseEther,
   parseEventLogs,
+  toBytes,
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { monadTestnet } from "viem/chains";
@@ -34,7 +36,7 @@ const DRIP = parseEther(flag("drip", "0.05"));
 const REWARD = parseEther(flag("reward", "0.05"));
 const MAX_QUORUM = 50;
 // what the phone page's estimate comes to for a first answer, with headroom; Monad charges the full limit
-const ANSWER_GAS = 200_000n;
+const ANSWER_GAS = 230_000n;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const src = readFileSync(join(here, "../contracts/deployedContracts.ts"), "utf8");
@@ -60,6 +62,9 @@ const abi = [
     inputs: [
       { name: "id", type: "uint256" },
       { name: "option", type: "uint8" },
+      { name: "codeHash", type: "bytes32" },
+      { name: "expiry", type: "uint64" },
+      { name: "signature", type: "bytes" },
     ],
     outputs: [],
   },
@@ -186,6 +191,20 @@ console.log(`funded ${PHONES} phones with ${formatEther(DRIP)} MON each in ${Dat
 
 // 3. every phone signs its own tap; 2 of 3 press ENTER so there is a clear majority
 const fees = await pub.estimateFeesPerGas();
+// each phone also needs an event pass; the funder is the contract's gatekeeper, so it signs them like /api/redeem does
+const expiry = BigInt(Math.floor(Date.now() / 1000) + 3600);
+const passes = await Promise.all(
+  phones.map(async (p, i) => {
+    const codeHash = keccak256(toBytes(`bench-${Date.now()}-${i}`));
+    const digest = keccak256(
+      encodeAbiParameters(
+        [{ type: "address" }, { type: "uint256" }, { type: "address" }, { type: "bytes32" }, { type: "uint64" }],
+        [address, BigInt(monadTestnet.id), p.address, codeHash, expiry],
+      ),
+    );
+    return { codeHash, signature: await funder.signMessage({ message: { raw: digest } }) };
+  }),
+);
 const signed = await Promise.all(
   phones.map((p, i) =>
     p.signTransaction({
@@ -195,7 +214,13 @@ const signed = await Promise.all(
       data: encodeFunctionData({
         abi,
         functionName: "answer",
-        args: [ids[Math.floor(i / MAX_QUORUM)].id, i % 3 === 2 ? 1 : 0],
+        args: [
+          ids[Math.floor(i / MAX_QUORUM)].id,
+          i % 3 === 2 ? 1 : 0,
+          passes[i].codeHash,
+          expiry,
+          passes[i].signature,
+        ],
       }),
       nonce: 0,
       gas: ANSWER_GAS,

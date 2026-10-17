@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import { MessageHashUtils } from "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+
 /**
  * @title EnterMarket
  * @notice An agent escrows MON and asks humans a multiple-choice question.
@@ -10,6 +13,10 @@ pragma solidity ^0.8.19;
  *         how many voters there are. Phones estimate gas against state that their neighbours are changing in the
  *         same block, and Monad charges the full gas limit, so a tap must never carry an unbounded payout loop.
  *         Winners are paid by payout(), which anyone (in practice the market agent) calls in batches right after.
+ *
+ *         Sybil resistance: voting needs a pass that the gatekeeper signs for one burner address and one code hash, so
+ *         a pass cannot be passed around. The first address that votes with a code hash owns it, so one-time invite
+ *         codes count once. The demo hands out passes for a room code that rotates on the projector.
  */
 contract EnterMarket {
     uint256 public constant MAX_OPTIONS = 8;
@@ -38,6 +45,10 @@ contract EnterMarket {
     mapping(address => uint256) public owed;
     // how many of voters[id] payout() has already gone through
     mapping(uint256 => uint256) public payoutCursor;
+    // signs event passes; address(0) leaves voting open to anyone
+    address public immutable gatekeeper;
+    // event code hash => the only address allowed to vote with it
+    mapping(bytes32 => address) public passHolder;
 
     event Asked(
         uint256 indexed id,
@@ -62,6 +73,13 @@ contract EnterMarket {
     error NotSettleable();
     error NothingOwed();
     error NothingToPay();
+    error BadPass();
+    error PassExpired();
+    error PassUsed();
+
+    constructor(address gatekeeper_) {
+        gatekeeper = gatekeeper_;
+    }
 
     function ask(string calldata text, string[] calldata options, uint16 quorum, uint64 ttl)
         external
@@ -88,7 +106,8 @@ contract EnterMarket {
         emit Asked(id, msg.sender, text, options, msg.value, quorum, q.deadline);
     }
 
-    function answer(uint256 id, uint8 option) external {
+    function answer(uint256 id, uint8 option, bytes32 codeHash, uint64 expiry, bytes calldata signature) external {
+        _checkPass(codeHash, expiry, signature);
         if (id >= questions.length) revert UnknownQuestion();
         Question storage q = questions[id];
         if (q.settled || block.timestamp >= q.deadline) revert Closed();
@@ -145,6 +164,22 @@ contract EnterMarket {
         owed[msg.sender] = 0;
         (bool ok,) = msg.sender.call{ value: amount }("");
         require(ok, "withdraw failed");
+    }
+
+    /// @notice What the gatekeeper signs (as an EIP-191 message) to let `voter` vote with event code `codeHash`.
+    function passDigest(address voter, bytes32 codeHash, uint64 expiry) public view returns (bytes32) {
+        return keccak256(abi.encode(address(this), block.chainid, voter, codeHash, expiry));
+    }
+
+    function _checkPass(bytes32 codeHash, uint64 expiry, bytes calldata signature) private {
+        if (gatekeeper == address(0)) return;
+        if (block.timestamp > expiry) revert PassExpired();
+        bytes32 digest = MessageHashUtils.toEthSignedMessageHash(passDigest(msg.sender, codeHash, expiry));
+        (address signer, ECDSA.RecoverError err,) = ECDSA.tryRecover(digest, signature);
+        if (err != ECDSA.RecoverError.NoError || signer != gatekeeper) revert BadPass();
+        address holder = passHolder[codeHash];
+        if (holder == address(0)) passHolder[codeHash] = msg.sender;
+        else if (holder != msg.sender) revert PassUsed();
     }
 
     function _decide(uint256 id) private {

@@ -33,7 +33,7 @@ export async function sendFromMarket(tx: MarketTx): Promise<Hash> {
       if (await publicClient.getTransaction({ hash }).then(Boolean, () => false)) return hash;
       // a failed send leaves a gap in the locally counted nonces, so re-read it from the chain
       nonceManager.reset({ address: account.address, chainId: CHAIN.id });
-      const clash = /higher priority|nonce/i.test(String((err as Error)?.message));
+      const clash = /higher priority|underpriced|already known|nonce/i.test(String((err as Error)?.message));
       if (!clash || attempt >= MAX_ATTEMPTS) throw err;
       await new Promise(r => setTimeout(r, 150 + Math.random() * 350 * attempt));
     }

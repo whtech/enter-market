@@ -7,8 +7,19 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 const deployedContracts = {
   10143: {
     EnterMarket: {
-      address: "0xaac47c455818805b0f0b6df2294c7309ec9a873f",
+      address: "0xd544a6d7f543930454a848780706afbab6c4e4ac",
       abi: [
+        {
+          type: "constructor",
+          inputs: [
+            {
+              name: "gatekeeper_",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
         {
           type: "function",
           name: "MAX_OPTIONS",
@@ -61,6 +72,21 @@ const deployedContracts = {
               name: "option",
               type: "uint8",
               internalType: "uint8",
+            },
+            {
+              name: "codeHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "expiry",
+              type: "uint64",
+              internalType: "uint64",
+            },
+            {
+              name: "signature",
+              type: "bytes",
+              internalType: "bytes",
             },
           ],
           outputs: [],
@@ -120,6 +146,19 @@ const deployedContracts = {
               name: "",
               type: "uint8",
               internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "gatekeeper",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
             },
           ],
           stateMutability: "view",
@@ -234,6 +273,54 @@ const deployedContracts = {
               name: "",
               type: "uint256",
               internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "passDigest",
+          inputs: [
+            {
+              name: "voter",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "codeHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "expiry",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "passHolder",
+          inputs: [
+            {
+              name: "",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
             },
           ],
           stateMutability: "view",
@@ -480,6 +567,11 @@ const deployedContracts = {
         },
         {
           type: "error",
+          name: "BadPass",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "BadQuorum",
           inputs: [],
         },
@@ -510,12 +602,22 @@ const deployedContracts = {
         },
         {
           type: "error",
+          name: "PassExpired",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "PassUsed",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "UnknownQuestion",
           inputs: [],
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 71733282,
+      deployedOnBlock: 71743421,
     },
   },
 } as const;

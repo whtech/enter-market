@@ -11,6 +11,7 @@ import "../contracts/EnterMarket.sol";
  */
 contract DeployEnterMarket is ScaffoldETHDeploy {
     function run() external ScaffoldEthDeployerRunner {
-        new EnterMarket();
+        // the market agent's address signs event passes; unset leaves voting open (local chain)
+        new EnterMarket(vm.envOr("GATEKEEPER", address(0)));
     }
 }

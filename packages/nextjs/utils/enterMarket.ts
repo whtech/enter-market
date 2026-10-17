@@ -45,6 +45,9 @@ export const ENTER_MARKET_ABI = [
     inputs: [
       { name: "id", type: "uint256" },
       { name: "option", type: "uint8" },
+      { name: "codeHash", type: "bytes32" },
+      { name: "expiry", type: "uint64" },
+      { name: "signature", type: "bytes" },
     ],
     outputs: [],
   },

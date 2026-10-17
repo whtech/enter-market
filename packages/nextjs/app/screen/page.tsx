@@ -34,6 +34,35 @@ const Screen: NextPage = () => {
 
   useEffect(() => setOrigin(window.location.origin), []);
 
+  // a fresh one-time event code every few seconds: scanning it proves you are in the room (sybil resistance)
+  const [eventCode, setEventCode] = useState<string>();
+  const [codeError, setCodeError] = useState<string>();
+  useEffect(() => {
+    const key = new URLSearchParams(window.location.search).get("key");
+    if (!key) {
+      setCodeError("open this page as /screen?key=… to show join codes");
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout>;
+    const next = async () => {
+      let wait = 5000;
+      try {
+        const res = await fetch(`/api/event-code?key=${encodeURIComponent(key)}`, { cache: "no-store" });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error);
+        setEventCode(body.code);
+        setCodeError(undefined);
+        wait = body.refreshInMs + 50;
+      } catch (e) {
+        setCodeError(e instanceof Error ? e.message : String(e));
+      }
+      timer = setTimeout(next, wait);
+    };
+    next();
+    return () => clearTimeout(timer);
+  }, []);
+  const joinUrl = eventCode ? `${origin}/?code=${eventCode}` : origin;
+
   useEffect(() => {
     let stopped = false;
     const tick = async () => {
@@ -171,8 +200,10 @@ const Screen: NextPage = () => {
       </div>
 
       <div className="flex flex-col min-h-0">
-        <div className="bg-white p-4 rounded-2xl self-center">{origin && <QRCodeSVG value={origin} size={300} />}</div>
+        <div className="bg-white p-4 rounded-2xl self-center">{origin && <QRCodeSVG value={joinUrl} size={300} />}</div>
         <p className="text-center font-mono mt-3 text-lg">{origin.replace(/^https?:\/\//, "")}</p>
+        {eventCode && <p className="text-center font-mono text-3xl font-bold text-[#836EF9]">{eventCode}</p>}
+        {codeError && <p className="text-center font-mono text-red-400">{codeError}</p>}
         <p className="text-center font-mono text-white/60">{txCount} taps onchain this session</p>
         <div className="flex flex-col gap-2 mt-6 overflow-hidden font-mono text-lg">
           {feed.map(item => (

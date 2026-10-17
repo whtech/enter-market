@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAddress, parseEther } from "viem";
 import { publicClient } from "~~/utils/enterMarket";
+import { isOwnPass } from "~~/utils/eventPass";
 import { marketWallet, sendFromMarket } from "~~/utils/marketWallet";
 
 const DRIP_AMOUNT = parseEther(process.env.DRIP_AMOUNT || "0.05");
@@ -12,10 +13,13 @@ const dripped = new Map<string, number>();
 export async function POST(req: Request) {
   if (!marketWallet) return NextResponse.json({ error: "drip not configured" }, { status: 503 });
 
-  const { address } = await req.json().catch(() => ({}));
+  const { address, pass } = await req.json().catch(() => ({}));
   if (typeof address !== "string" || !isAddress(address)) {
     return NextResponse.json({ error: "bad address" }, { status: 400 });
   }
+  // gas only for phones that redeemed an event code, or the drip would fund a sybil's burners
+  if (!(await isOwnPass(address as `0x${string}`, pass ?? {})))
+    return NextResponse.json({ error: "no event pass" }, { status: 403 });
 
   const last = dripped.get(address.toLowerCase());
   if (last && Date.now() - last < 60_000) return NextResponse.json({ skipped: "recently dripped" });
