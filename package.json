@@ -47,7 +47,8 @@
     "vercel": "yarn workspace @se-2/nextjs vercel",
     "vercel:login": "yarn workspace @se-2/nextjs vercel:login",
     "vercel:yolo": "yarn workspace @se-2/nextjs vercel:yolo",
-    "verify": "yarn foundry:verify"
+    "verify": "yarn foundry:verify",
+    "agent": "yarn workspace @se-2/nextjs node scripts/agent.mjs"
   },
   "resolutions": {
     "@coinbase/cdp-sdk": "1.52.0"
