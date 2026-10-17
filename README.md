@@ -1,83 +1,63 @@
-# 🏗 Scaffold-ETH 2
+# ENTER Market
 
-<h4 align="center">
-  <a href="https://docs.scaffoldeth.io">Documentation</a> |
-  <a href="https://scaffoldeth.io">Website</a>
-</h4>
+> I press ENTER 1000 times a day for my AI agents. Now my agent pays **you** to press it.
 
-🧪 An open-source, up-to-date toolkit for building decentralized applications (dapps) on the Ethereum blockchain. It's designed to make it easier for developers to create and deploy smart contracts and build user interfaces that interact with those contracts.
+Coding agents keep stopping for a human: "Commit and push?", "Which of these 3 headlines?", "Is this output OK?".
+ENTER Market turns that pause into a paid, onchain market for human judgment.
 
-> [!NOTE]
-> 🤖 Scaffold-ETH 2 is AI-ready! It has everything agents need to build on Ethereum. Check `.agents/`, `.claude/`, `.opencode` or `.cursor/` for more info.
+1. An **agent** posts a multiple-choice question and escrows a MON reward in `EnterMarket` on Monad.
+2. Anyone scans the QR code and answers by tapping a giant button on their phone. A burner wallet and a gas drip mean no wallet install.
+3. When the quorum is reached, the contract picks the majority answer and **pays the winning voters in the same transaction**.
+4. The agent reads the result and keeps working with the crowd's choice.
 
-⚙️ Built using NextJS, RainbowKit, Foundry, Wagmi, Viem, and Typescript.
+![projector screen](docs/screen.jpg)
+![phone](docs/phone.jpg)
 
-- ✅ **Contract Hot Reload**: Your frontend auto-adapts to your smart contract as you edit it.
-- 🪝 **[Custom hooks](https://docs.scaffoldeth.io/hooks/)**: Collection of React hooks wrapper around [wagmi](https://wagmi.sh/) to simplify interactions with smart contracts with typescript autocompletion.
-- 🧱 [**Components**](https://docs.scaffoldeth.io/components/): Collection of common web3 components to quickly build your frontend.
-- 🔥 **Burner Wallet & Local Faucet**: Quickly test your application with a burner wallet and local faucet.
-- 🔐 **Integration with Wallet Providers**: Connect to different wallet providers and interact with the Ethereum network.
+## Why Monad
 
-![Debug Contracts tab](https://github.com/scaffold-eth/scaffold-eth-2/assets/55535804/b237af0c-5027-4849-a5c1-2e31495cccb1)
+- **Tap → paid has to feel like pressing ENTER.** On Monad testnet we measured about 1.4 s from tap to confirmed receipt in the browser, including signing and RPC round trips. The payment is part of the interaction, not a wait.
+- **A whole room tapping at once** is many small transactions in a few seconds: the load Monad is built for.
+- Escrow, settlement and every payout are public receipts onchain. Without the chain there is no trustless way for an agent to pay strangers for judgment.
 
-## Requirements
+## Deployed
 
-Before you begin, you need to install the following tools:
+| | |
+| --- | --- |
+| Contract (Monad testnet, verified) | [`0x423ee13658aba891e97c8b1ee2f70f33a56db3d4`](https://testnet.monadexplorer.com/address/0x423ee13658aba891e97c8b1ee2f70f33a56db3d4) |
+| Phone page | `/` |
+| Projector page | `/screen` |
 
-- [Node (>= v20.18.3)](https://nodejs.org/en/download/)
-- Yarn ([v1](https://classic.yarnpkg.com/en/docs/install/) or [v2+](https://yarnpkg.com/getting-started/install))
-- [Git](https://git-scm.com/downloads)
-
-## Quickstart
-
-To get started with Scaffold-ETH 2, follow the steps below:
-
-1. Install dependencies if it was skipped in CLI:
+## How it is built
 
 ```
-cd my-dapp-example
+agent (viem) ──ask(question, options, quorum, ttl) + MON──▶ EnterMarket.sol
+phones (burner wallets) ──answer(id, option)──────────────▶   │ quorum reached → majority wins
+                                                               │ pays each winner, dust back to agent
+agent ◀──────────────────── getQuestion(id).settled ──────────┘
+```
+
+- `packages/foundry/contracts/EnterMarket.sol`: escrow, one answer per address, auto-settle on quorum, anyone can `settle()` after the deadline, refund when nobody answers, a tie goes to the lowest option. Failed payouts are kept for `withdraw()`.
+- `packages/nextjs/app/page.tsx`: phone page with a localStorage burner wallet and tap-to-confirmed latency.
+- `packages/nextjs/app/screen/page.tsx`: projector page with QR code, live vote bars and payout feed.
+- `packages/nextjs/app/api/drip/route.ts`: sends a little gas MON to new burners.
+- `packages/nextjs/scripts/agent.mjs`: the demo agent.
+
+Built with Scaffold-ETH 2, Foundry, Next.js, viem and Vercel.
+
+## Run it
+
+```bash
 yarn install
-```
+yarn foundry:test                       # contract tests
 
-2. Run a local network in the first terminal:
-
-```
-yarn chain
-```
-
-This command starts a local Ethereum network using Foundry. The network runs on your local machine and can be used for testing and development. You can customize the network configuration in `packages/foundry/foundry.toml`.
-
-3. On a second terminal, deploy the test contract:
-
-```
-yarn deploy
-```
-
-This command deploys a test smart contract to the local network. The contract is located in `packages/foundry/contracts` and can be modified to suit your needs. The `yarn deploy` command uses the deploy script located in `packages/foundry/script` to deploy the contract to the network. You can also customize the deploy script.
-
-4. On a third terminal, start your NextJS app:
-
-```
+# frontend, needs DRIP_PRIVATE_KEY in packages/nextjs/.env.local
 yarn start
+
+# agent: asks the room, waits for the onchain majority, continues
+AGENT_PRIVATE_KEY=0x... yarn agent poster --reward 0.2 --quorum 5
+AGENT_PRIVATE_KEY=0x... yarn agent friday
 ```
 
-Visit your app on: `http://localhost:3000`. You can interact with your smart contract using the `Debug Contracts` page. You can tweak the app config in `packages/nextjs/scaffold.config.ts`.
+## Out of scope for the hackathon
 
-Run smart contract test with `yarn foundry:test`
-
-- Edit your smart contracts in `packages/foundry/contracts`
-- Edit your frontend homepage at `packages/nextjs/app/page.tsx`. For guidance on [routing](https://nextjs.org/docs/app/building-your-application/routing/defining-routes) and configuring [pages/layouts](https://nextjs.org/docs/app/building-your-application/routing/pages-and-layouts) checkout the Next.js documentation.
-- Edit your deployment scripts in `packages/foundry/script`
-
-
-## Documentation
-
-Visit our [docs](https://docs.scaffoldeth.io) to learn how to start building with Scaffold-ETH 2.
-
-To know more about its features, check out our [website](https://scaffoldeth.io).
-
-## Contributing to Scaffold-ETH 2
-
-We welcome contributions to Scaffold-ETH 2!
-
-Please see [CONTRIBUTING.MD](https://github.com/scaffold-eth/scaffold-eth-2/blob/main/CONTRIBUTING.md) for more information and guidelines for contributing to Scaffold-ETH 2.
+Sybil resistance (one person can open many burners), reputation, disputes and mainnet. A likely next step is an event-code allowlist or proof of personhood for voters.

@@ -4,6 +4,459 @@
  */
 import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 
-const deployedContracts = {} as const;
+const deployedContracts = {
+  10143: {
+    EnterMarket: {
+      address: "0x423ee13658aba891e97c8b1ee2f70f33a56db3d4",
+      abi: [
+        {
+          type: "function",
+          name: "MAX_OPTIONS",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "MAX_QUORUM",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "NO_WINNER",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "answer",
+          inputs: [
+            {
+              name: "id",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "option",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "ask",
+          inputs: [
+            {
+              name: "text",
+              type: "string",
+              internalType: "string",
+            },
+            {
+              name: "options",
+              type: "string[]",
+              internalType: "string[]",
+            },
+            {
+              name: "quorum",
+              type: "uint16",
+              internalType: "uint16",
+            },
+            {
+              name: "ttl",
+              type: "uint64",
+              internalType: "uint64",
+            },
+          ],
+          outputs: [
+            {
+              name: "id",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "payable",
+        },
+        {
+          type: "function",
+          name: "choiceOfVoter",
+          inputs: [
+            {
+              name: "id",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "voter",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint8",
+              internalType: "uint8",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getQuestion",
+          inputs: [
+            {
+              name: "id",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "tuple",
+              internalType: "struct EnterMarket.Question",
+              components: [
+                {
+                  name: "asker",
+                  type: "address",
+                  internalType: "address",
+                },
+                {
+                  name: "deadline",
+                  type: "uint64",
+                  internalType: "uint64",
+                },
+                {
+                  name: "quorum",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "answerCount",
+                  type: "uint16",
+                  internalType: "uint16",
+                },
+                {
+                  name: "settled",
+                  type: "bool",
+                  internalType: "bool",
+                },
+                {
+                  name: "winner",
+                  type: "uint8",
+                  internalType: "uint8",
+                },
+                {
+                  name: "reward",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "perWinner",
+                  type: "uint256",
+                  internalType: "uint256",
+                },
+                {
+                  name: "text",
+                  type: "string",
+                  internalType: "string",
+                },
+                {
+                  name: "options",
+                  type: "string[]",
+                  internalType: "string[]",
+                },
+                {
+                  name: "counts",
+                  type: "uint256[]",
+                  internalType: "uint256[]",
+                },
+              ],
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getVoters",
+          inputs: [
+            {
+              name: "id",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "address[]",
+              internalType: "address[]",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "owed",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "questionCount",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "settle",
+          inputs: [
+            {
+              name: "id",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "withdraw",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "event",
+          name: "Answered",
+          inputs: [
+            {
+              name: "id",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "voter",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "option",
+              type: "uint8",
+              indexed: false,
+              internalType: "uint8",
+            },
+            {
+              name: "answerCount",
+              type: "uint16",
+              indexed: false,
+              internalType: "uint16",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "Asked",
+          inputs: [
+            {
+              name: "id",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "asker",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "text",
+              type: "string",
+              indexed: false,
+              internalType: "string",
+            },
+            {
+              name: "options",
+              type: "string[]",
+              indexed: false,
+              internalType: "string[]",
+            },
+            {
+              name: "reward",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "quorum",
+              type: "uint16",
+              indexed: false,
+              internalType: "uint16",
+            },
+            {
+              name: "deadline",
+              type: "uint64",
+              indexed: false,
+              internalType: "uint64",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "Paid",
+          inputs: [
+            {
+              name: "id",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "voter",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "Settled",
+          inputs: [
+            {
+              name: "id",
+              type: "uint256",
+              indexed: true,
+              internalType: "uint256",
+            },
+            {
+              name: "winner",
+              type: "uint8",
+              indexed: false,
+              internalType: "uint8",
+            },
+            {
+              name: "perWinner",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+            {
+              name: "winners",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "error",
+          name: "AlreadyAnswered",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "BadOption",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "BadOptions",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "BadQuorum",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "Closed",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "NoReward",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "NotSettleable",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "NothingOwed",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "UnknownQuestion",
+          inputs: [],
+        },
+      ],
+      inheritedFunctions: {},
+      deployedOnBlock: 71710620,
+    },
+  },
+} as const;
 
 export default deployedContracts satisfies GenericContractsDeclaration;
