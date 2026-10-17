@@ -144,8 +144,17 @@ const Screen: NextPage = () => {
         return [...items.filter(i => !seen.has(i.key)).reverse(), ...f].slice(0, 14);
       });
     };
-    tick().catch(e => console.warn("[screen]", e));
-    const timer = setInterval(() => tick().catch(e => console.warn("[screen]", e)), 1000);
+    // a tick can outlast the interval; overlapping ticks would read the same blocks and count taps twice
+    let busy = false;
+    const run = () => {
+      if (busy) return;
+      busy = true;
+      tick()
+        .catch(e => console.warn("[screen]", e))
+        .finally(() => (busy = false));
+    };
+    run();
+    const timer = setInterval(run, 1000);
     return () => {
       stopped = true;
       clearInterval(timer);
