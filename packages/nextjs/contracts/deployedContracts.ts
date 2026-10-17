@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 const deployedContracts = {
   10143: {
     EnterMarket: {
-      address: "0x423ee13658aba891e97c8b1ee2f70f33a56db3d4",
+      address: "0xaac47c455818805b0f0b6df2294c7309ec9a873f",
       abi: [
         {
           type: "function",
@@ -240,6 +240,62 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "payout",
+          inputs: [
+            {
+              name: "id",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "max",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "payoutCursor",
+          inputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "pendingPayouts",
+          inputs: [
+            {
+              name: "id",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "questionCount",
           inputs: [],
           outputs: [
@@ -449,12 +505,17 @@ const deployedContracts = {
         },
         {
           type: "error",
+          name: "NothingToPay",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "UnknownQuestion",
           inputs: [],
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 71710620,
+      deployedOnBlock: 71733282,
     },
   },
 } as const;

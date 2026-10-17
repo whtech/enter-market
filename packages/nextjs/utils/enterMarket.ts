@@ -50,6 +50,23 @@ export const ENTER_MARKET_ABI = [
   },
   {
     type: "function",
+    name: "payout",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "id", type: "uint256" },
+      { name: "max", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "pendingPayouts",
+    stateMutability: "view",
+    inputs: [{ name: "id", type: "uint256" }],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
     name: "questionCount",
     stateMutability: "view",
     inputs: [],
@@ -146,3 +163,7 @@ export async function fetchLatestQuestion(): Promise<Question | null> {
 }
 
 export const NO_WINNER = 255;
+
+/** Asks the market agent to pay the winners of a settled question. Safe to call from every phone at once. */
+export const requestPayout = (id: bigint) =>
+  fetch("/api/payout", { method: "POST", body: JSON.stringify({ id: id.toString() }) }).catch(() => undefined);

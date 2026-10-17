@@ -70,6 +70,16 @@ const abi = [
   },
   {
     type: "function",
+    name: "payout",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "id", type: "uint256" },
+      { name: "max", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
     name: "getQuestion",
     stateMutability: "view",
     inputs: [{ name: "id", type: "uint256" }],
@@ -164,6 +174,20 @@ async function askDirectly() {
   return asked.args.id;
 }
 
+// Answers only decide the winner; paying them is a separate batch tx. Over x402 the local agent pays (we hold no MON).
+async function payWinners(id) {
+  if (x402Url) {
+    const res = await fetch(`${x402Url.replace(/\/$/, "")}/api/payout`, {
+      method: "POST",
+      body: JSON.stringify({ id: id.toString() }),
+    });
+    return (await res.json()).hash;
+  }
+  const hash = await wallet.writeContract({ address, abi, functionName: "payout", args: [id, 50n] });
+  await pub.waitForTransactionReceipt({ hash, pollingInterval: 250 });
+  return hash;
+}
+
 say(scenario.intro);
 const x402Url = flag("x402");
 const id = x402Url ? await askViaX402(x402Url.replace(/\/$/, "")) : await askDirectly();
@@ -182,7 +206,12 @@ for (;;) {
       say("Nobody answered, refunded. Falling back to my own guess.");
     } else {
       const choice = q.options[q.winner];
-      say(`✔ Crowd chose "${choice}" (${formatEther(q.perWinner)} MON paid to each winner)`);
+      say(`✔ Crowd chose "${choice}"`);
+      const payoutTx = await payWinners(id).catch(() => undefined);
+      say(
+        `Paid ${formatEther(q.perWinner)} MON to each of ${q.counts[q.winner]} winners` +
+          (payoutTx ? ` → ${explorer}/tx/${payoutTx}` : " (already paid by the room)"),
+      );
       say(`Continuing: ${scenario.next(choice)}`);
     }
     break;

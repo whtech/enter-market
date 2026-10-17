@@ -13,6 +13,7 @@ import {
   type Question,
   fetchLatestQuestion,
   publicClient,
+  requestPayout,
 } from "~~/utils/enterMarket";
 
 type FeedItem = { key: string; kind: "answer" | "paid" | "agent"; voter: string; text: string; hash: string };
@@ -29,6 +30,7 @@ const Screen: NextPage = () => {
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [txCount, setTxCount] = useState(0);
   const lastBlock = useRef<bigint>(0n);
+  const payoutRequested = useRef<bigint>(-1n);
 
   useEffect(() => setOrigin(window.location.origin), []);
 
@@ -38,6 +40,11 @@ const Screen: NextPage = () => {
       const q = await fetchLatestQuestion();
       if (stopped) return;
       setQuestion(q);
+      // the projector stays open for the whole demo, so it makes sure the winners get paid
+      if (q?.settled && q.winner !== NO_WINNER && payoutRequested.current !== q.id) {
+        payoutRequested.current = q.id;
+        requestPayout(q.id);
+      }
 
       const latest = await publicClient.getBlockNumber();
       // Monad RPC caps eth_getLogs at 100 blocks, so catch up in windows of at most 100

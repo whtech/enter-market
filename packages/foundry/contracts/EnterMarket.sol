@@ -5,7 +5,11 @@ pragma solidity ^0.8.19;
  * @title EnterMarket
  * @notice An agent escrows MON and asks humans a multiple-choice question.
  *         Humans answer with one tap. When the quorum is reached (or the deadline passes)
- *         the majority option wins and the reward is split among its voters immediately.
+ *         the majority option wins and the reward is split among its voters.
+ * @dev    The tap that reaches quorum only decides the winner, so every answer costs about the same gas no matter
+ *         how many voters there are. Phones estimate gas against state that their neighbours are changing in the
+ *         same block, and Monad charges the full gas limit, so a tap must never carry an unbounded payout loop.
+ *         Winners are paid by payout(), which anyone (in practice the market agent) calls in batches right after.
  */
 contract EnterMarket {
     uint256 public constant MAX_OPTIONS = 8;
@@ -32,6 +36,8 @@ contract EnterMarket {
     mapping(uint256 => mapping(address => uint8)) private choiceOf;
     // payouts that could not be pushed are kept here for withdraw()
     mapping(address => uint256) public owed;
+    // how many of voters[id] payout() has already gone through
+    mapping(uint256 => uint256) public payoutCursor;
 
     event Asked(
         uint256 indexed id,
@@ -55,6 +61,7 @@ contract EnterMarket {
     error BadOption();
     error NotSettleable();
     error NothingOwed();
+    error NothingToPay();
 
     function ask(string calldata text, string[] calldata options, uint16 quorum, uint64 ttl)
         external
@@ -94,15 +101,42 @@ contract EnterMarket {
         q.answerCount++;
         emit Answered(id, msg.sender, option, q.answerCount);
 
-        if (q.answerCount >= q.quorum) _settle(id);
+        if (q.answerCount >= q.quorum) _decide(id);
     }
 
-    /// @notice Anyone can settle after the deadline; settles automatically on quorum.
+    /// @notice Anyone can settle after the deadline; settles automatically on quorum. Winners are paid by payout().
     function settle(uint256 id) external {
         if (id >= questions.length) revert UnknownQuestion();
         Question storage q = questions[id];
         if (q.settled || (q.answerCount < q.quorum && block.timestamp < q.deadline)) revert NotSettleable();
-        _settle(id);
+        _decide(id);
+    }
+
+    /// @notice Pays up to `max` of the remaining winners, then the rounding dust back to the asker. Anyone can call it.
+    function payout(uint256 id, uint256 max) external {
+        if (id >= questions.length) revert UnknownQuestion();
+        Question storage q = questions[id];
+        address[] storage list = voters[id];
+        uint256 from = payoutCursor[id];
+        if (!q.settled || q.winner == NO_WINNER || from >= list.length) revert NothingToPay();
+
+        uint256 to = from + max < list.length ? from + max : list.length;
+        payoutCursor[id] = to;
+        for (uint256 i = from; i < to; i++) {
+            if (choiceOf[id][list[i]] == q.winner + 1) _pay(id, list[i], q.perWinner);
+        }
+        if (to == list.length) {
+            uint256 dust = q.reward - q.perWinner * q.counts[q.winner];
+            if (dust > 0) _pay(id, q.asker, dust);
+        }
+    }
+
+    /// @return how many voters payout() still has to go through
+    function pendingPayouts(uint256 id) external view returns (uint256) {
+        if (id >= questions.length) revert UnknownQuestion();
+        Question storage q = questions[id];
+        if (!q.settled || q.winner == NO_WINNER) return 0;
+        return voters[id].length - payoutCursor[id];
     }
 
     function withdraw() external {
@@ -113,7 +147,7 @@ contract EnterMarket {
         require(ok, "withdraw failed");
     }
 
-    function _settle(uint256 id) private {
+    function _decide(uint256 id) private {
         Question storage q = questions[id];
         q.settled = true;
 
@@ -133,13 +167,6 @@ contract EnterMarket {
         q.winner = winner;
         q.perWinner = perWinner;
         emit Settled(id, winner, perWinner, winners);
-
-        address[] storage list = voters[id];
-        for (uint256 i = 0; i < list.length; i++) {
-            if (choiceOf[id][list[i]] == winner + 1) _pay(id, list[i], perWinner);
-        }
-        uint256 dust = q.reward - perWinner * winners;
-        if (dust > 0) _pay(id, q.asker, dust);
     }
 
     function _pay(uint256 id, address to, uint256 amount) private {

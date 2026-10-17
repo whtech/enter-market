@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { NextPage } from "next";
 import { createWalletClient, formatEther, http } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
@@ -14,6 +14,7 @@ import {
   RPC_URL,
   fetchLatestQuestion,
   publicClient,
+  requestPayout,
 } from "~~/utils/enterMarket";
 
 const BURNER_KEY = "enter-market-burner";
@@ -42,6 +43,7 @@ const Home: NextPage = () => {
   const [balance, setBalance] = useState<bigint>();
   const [tap, setTap] = useState<Tap>();
   const [now, setNow] = useState(() => Date.now());
+  const payoutRequested = useRef<bigint>(-1n);
 
   useEffect(() => setKey(loadBurnerKey()), []);
 
@@ -60,6 +62,11 @@ const Home: NextPage = () => {
     if (!account) return;
     const q = await fetchLatestQuestion();
     setQuestion(q);
+    // answers only decide the winner; ask the market agent to pay out (it shares one tx across all phones)
+    if (q?.settled && q.winner !== NO_WINNER && payoutRequested.current !== q.id) {
+      payoutRequested.current = q.id;
+      requestPayout(q.id);
+    }
     setBalance(await publicClient.getBalance({ address: account.address }));
     if (q) {
       const choice = await publicClient.readContract({
