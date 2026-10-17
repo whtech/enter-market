@@ -3,6 +3,10 @@
 // waits for the onchain majority, then carries on with that answer.
 //
 // Usage: AGENT_PRIVATE_KEY=0x... node scripts/agent.mjs [poster|friday] [--reward 0.1] [--quorum 5] [--ttl 120]
+//        AGENT_PRIVATE_KEY=0x... node scripts/agent.mjs poster --x402 https://enter-market.vercel.app
+import { toClientEvmSigner } from "@x402/evm";
+import { registerExactEvmScheme } from "@x402/evm/exact/client";
+import { decodePaymentResponseHeader, wrapFetchWithPayment, x402Client } from "@x402/fetch";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -112,20 +116,57 @@ const wallet = createWalletClient({ account, chain: monadTestnet, transport: htt
 const address = contractAddress();
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const say = msg => console.log(`🤖 ${msg}`);
+const explorer = "https://testnet.monadexplorer.com";
+
+// --x402 <base url>: outsource the decision over x402 instead of escrowing MON ourselves.
+// By default we hire the contractor agent (/api/outsource), which subcontracts to the local ENTER Market agent
+// (/api/ask) that hires the humans. --x402-path /api/ask skips the middleman. This agent needs only USDC, no MON.
+async function askViaX402(baseUrl) {
+  const client = new x402Client();
+  registerExactEvmScheme(client, { signer: toClientEvmSigner(account, pub) });
+  const payingFetch = wrapFetchWithPayment(fetch, client);
+  const path = flag("x402-path", "/api/outsource");
+  say(`Outsourcing the decision to ${baseUrl}${path} (x402, USDC)`);
+  const res = await payingFetch(`${baseUrl}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ question: scenario.question, options: scenario.options, quorum, ttl: Number(ttl) }),
+  });
+  if (!res.ok) throw new Error(`ENTER Market API answered ${res.status}: ${await res.text()}`);
+  const body = await res.json();
+  const settlement = res.headers.get("payment-response");
+  if (settlement) {
+    const { transaction, payer } = decodePaymentResponseHeader(settlement);
+    say(`Paid via x402 from ${payer} → ${explorer}/tx/${transaction}`);
+  }
+  if (body.contractorAgent) {
+    say(
+      `Contractor agent ${body.contractorAgent} subcontracted it to the local crowd agent → ${explorer}/tx/${body.subcontractTx}`,
+    );
+  }
+  say(`ENTER Market agent ${body.marketAgent} escrowed ${formatEther(BigInt(body.reward))} MON for the humans`);
+  say(`Question #${body.id} is live → ${explorer}/tx/${body.askTx}`);
+  return BigInt(body.id);
+}
+
+async function askDirectly() {
+  say(`Paying ${formatEther(reward)} MON for ${quorum} humans to decide: "${scenario.question}"`);
+  const hash = await wallet.writeContract({
+    address,
+    abi,
+    functionName: "ask",
+    args: [scenario.question, scenario.options, quorum, ttl],
+    value: reward,
+  });
+  const receipt = await pub.waitForTransactionReceipt({ hash, pollingInterval: 250 });
+  const [asked] = parseEventLogs({ abi, logs: receipt.logs, eventName: "Asked" });
+  say(`Question #${asked.args.id} is live → ${explorer}/tx/${hash}`);
+  return asked.args.id;
+}
 
 say(scenario.intro);
-say(`Paying ${formatEther(reward)} MON for ${quorum} humans to decide: "${scenario.question}"`);
-const hash = await wallet.writeContract({
-  address,
-  abi,
-  functionName: "ask",
-  args: [scenario.question, scenario.options, quorum, ttl],
-  value: reward,
-});
-const receipt = await pub.waitForTransactionReceipt({ hash, pollingInterval: 250 });
-const [asked] = parseEventLogs({ abi, logs: receipt.logs, eventName: "Asked" });
-const id = asked.args.id;
-say(`Question #${id} is live → https://testnet.monadexplorer.com/tx/${hash}`);
+const x402Url = flag("x402");
+const id = x402Url ? await askViaX402(x402Url.replace(/\/$/, "")) : await askDirectly();
 say("Waiting for humans to press ENTER…");
 
 let seen = -1;

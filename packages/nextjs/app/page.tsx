@@ -77,7 +77,8 @@ const Home: NextPage = () => {
     const timer = setInterval(() => {
       setNow(Date.now());
       refresh().catch(() => {});
-    }, 1000);
+      // 2s keeps a full room of phones under the public RPC rate limit
+    }, 2000);
     return () => clearInterval(timer);
   }, [refresh]);
 

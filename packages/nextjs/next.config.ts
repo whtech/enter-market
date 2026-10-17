@@ -4,15 +4,10 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   devIndicators: false,
   turbopack: {
-    resolveAlias: Object.fromEntries(
-      [
-        "@x402/core/client",
-        "@x402/evm",
-        "@x402/evm/exact/client",
-        "@x402/evm/upto/client",
-        "@x402/svm/exact/client",
-      ].map(name => [name, "./stubs/empty.js"]),
-    ),
+    resolveAlias: {
+      // optional Solana peer of @coinbase/cdp-sdk that this app never calls
+      "@x402/svm/exact/client": "./stubs/empty.js",
+    },
   },
   typescript: {
     ignoreBuildErrors: process.env.NEXT_PUBLIC_IGNORE_BUILD_ERROR === "true",

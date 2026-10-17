@@ -3,18 +3,23 @@
 import { useEffect, useRef, useState } from "react";
 import type { NextPage } from "next";
 import { QRCodeSVG } from "qrcode.react";
-import { formatEther } from "viem";
+import { formatEther, formatUnits, parseAbiItem } from "viem";
 import {
   ENTER_MARKET_ABI,
   ENTER_MARKET_ADDRESS,
   EXPLORER,
+  MONAD_USDC,
   NO_WINNER,
   type Question,
   fetchLatestQuestion,
   publicClient,
 } from "~~/utils/enterMarket";
 
-type FeedItem = { key: string; kind: "answer" | "paid"; voter: string; text: string; hash: string };
+type FeedItem = { key: string; kind: "answer" | "paid" | "agent"; voter: string; text: string; hash: string };
+
+const CONTRACTOR = process.env.NEXT_PUBLIC_CONTRACTOR_AGENT?.toLowerCase();
+
+const USDC_TRANSFER = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -34,22 +39,58 @@ const Screen: NextPage = () => {
       if (stopped) return;
       setQuestion(q);
 
-      // read new events block by block so a long-running screen never asks for a huge log range
       const latest = await publicClient.getBlockNumber();
-      const from = lastBlock.current === 0n ? latest - 50n : lastBlock.current + 1n;
+      // Monad RPC caps eth_getLogs at 100 blocks, so catch up in windows of at most 100
+      const from = lastBlock.current === 0n ? latest - 99n : lastBlock.current + 1n;
       if (from > latest) return;
+      const to = from + 99n < latest ? from + 99n : latest;
       const logs = await publicClient.getContractEvents({
         address: ENTER_MARKET_ADDRESS,
         abi: ENTER_MARKET_ABI,
         fromBlock: from,
-        toBlock: latest,
+        toBlock: to,
       });
-      lastBlock.current = latest;
-      if (stopped || logs.length === 0) return;
+      // x402 payments from buyer agents land as USDC transfers to the agent that asks onchain
+      const x402Payments = q
+        ? await publicClient.getLogs({
+            address: MONAD_USDC,
+            event: USDC_TRANSFER,
+            args: { to: [q.asker, CONTRACTOR].filter(Boolean) as `0x${string}`[] },
+            fromBlock: from,
+            toBlock: to,
+          })
+        : [];
+      lastBlock.current = to;
+      if (stopped || logs.length + x402Payments.length === 0) return;
+      const ordered = [...x402Payments, ...logs].sort((a, b) =>
+        a.blockNumber === b.blockNumber ? a.logIndex - b.logIndex : Number(a.blockNumber - b.blockNumber),
+      );
       const items: FeedItem[] = [];
-      for (const log of logs) {
+      for (const log of ordered) {
         const key = `${log.transactionHash}-${log.logIndex}`;
-        if (log.eventName === "Answered") {
+        if (log.eventName === "Transfer") {
+          const hop =
+            log.args.to!.toLowerCase() === CONTRACTOR
+              ? "🏢 client agent hired contractor"
+              : log.args.from!.toLowerCase() === CONTRACTOR
+                ? "🧑‍💼 contractor hired local agent"
+                : "🏢 client agent hired local agent";
+          items.push({
+            key,
+            kind: "agent",
+            voter: log.args.from!,
+            text: `${hop} · $${formatUnits(log.args.value!, 6)} USDC x402`,
+            hash: log.transactionHash,
+          });
+        } else if (log.eventName === "Asked") {
+          items.push({
+            key,
+            kind: "agent",
+            voter: log.args.asker!,
+            text: `🏪 local agent escrowed ${formatEther(log.args.reward!)} MON for humans`,
+            hash: log.transactionHash,
+          });
+        } else if (log.eventName === "Answered") {
           items.push({ key, kind: "answer", voter: log.args.voter!, text: "pressed ENTER", hash: log.transactionHash });
         } else if (log.eventName === "Paid") {
           items.push({
@@ -62,10 +103,13 @@ const Screen: NextPage = () => {
         }
       }
       setTxCount(c => c + logs.filter(l => l.eventName === "Answered").length);
-      setFeed(f => [...items.reverse(), ...f].slice(0, 14));
+      setFeed(f => {
+        const seen = new Set(f.map(i => i.key));
+        return [...items.filter(i => !seen.has(i.key)).reverse(), ...f].slice(0, 14);
+      });
     };
-    tick().catch(() => {});
-    const timer = setInterval(() => tick().catch(() => {}), 1000);
+    tick().catch(e => console.warn("[screen]", e));
+    const timer = setInterval(() => tick().catch(e => console.warn("[screen]", e)), 1000);
     return () => {
       stopped = true;
       clearInterval(timer);
@@ -130,7 +174,9 @@ const Screen: NextPage = () => {
               href={`${EXPLORER}/tx/${item.hash}`}
               target="_blank"
               rel="noreferrer"
-              className={item.kind === "paid" ? "text-green-400" : "text-white/80"}
+              className={
+                item.kind === "paid" ? "text-green-400" : item.kind === "agent" ? "text-[#836EF9]" : "text-white/80"
+              }
             >
               {short(item.voter)} {item.text}
             </a>

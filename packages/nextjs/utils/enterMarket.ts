@@ -5,6 +5,7 @@ import deployedContracts from "~~/contracts/deployedContracts";
 export const CHAIN = monadTestnet;
 export const RPC_URL = process.env.NEXT_PUBLIC_MONAD_RPC_URL || "https://testnet-rpc.monad.xyz";
 export const EXPLORER = "https://testnet.monadexplorer.com";
+export const MONAD_USDC = "0x534b2f3A21130d7a60830c2Df862319e593943A3";
 
 const deployed = (deployedContracts as Record<number, Record<string, { address: `0x${string}` }>>)[CHAIN.id];
 
@@ -12,6 +13,31 @@ export const ENTER_MARKET_ADDRESS = (process.env.NEXT_PUBLIC_ENTER_MARKET_ADDRES
   deployed?.EnterMarket?.address) as `0x${string}`;
 
 export const ENTER_MARKET_ABI = [
+  {
+    type: "function",
+    name: "ask",
+    stateMutability: "payable",
+    inputs: [
+      { name: "text", type: "string" },
+      { name: "options", type: "string[]" },
+      { name: "quorum", type: "uint16" },
+      { name: "ttl", type: "uint64" },
+    ],
+    outputs: [{ name: "id", type: "uint256" }],
+  },
+  {
+    type: "event",
+    name: "Asked",
+    inputs: [
+      { name: "id", type: "uint256", indexed: true },
+      { name: "asker", type: "address", indexed: true },
+      { name: "text", type: "string", indexed: false },
+      { name: "options", type: "string[]", indexed: false },
+      { name: "reward", type: "uint256", indexed: false },
+      { name: "quorum", type: "uint16", indexed: false },
+      { name: "deadline", type: "uint64", indexed: false },
+    ],
+  },
   {
     type: "function",
     name: "answer",
