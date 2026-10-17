@@ -30,7 +30,17 @@ export function issueCode(now = Date.now()) {
   return { code: `${slot}-${mac(slot)}`, refreshInMs: SLOT_MS - (now % SLOT_MS) };
 }
 
+// One-time invite codes (printed cards, or one per remote judge from /try): INV<n>-<mac>. They do not expire, and the
+// contract lets only the first address that votes with one use it.
+const INVITE = /^INV(\d{1,15})-([0-9A-Z]{6})$/;
+
+export const issueInvite = (n: number | bigint) => `INV${n}-${mac(`invite:${n}`)}`;
+
+export const isInviteCode = (code: string) => INVITE.test(code);
+
 export function isValidCode(code: string, now = Date.now()) {
+  const invite = INVITE.exec(code);
+  if (invite) return !!secret && timingSafeEqual(Buffer.from(mac(`invite:${invite[1]}`)), Buffer.from(invite[2]));
   const match = /^([0-9A-Z]{1,10})-([0-9A-Z]{6})$/.exec(code);
   if (!secret || !match) return false;
   const [, slot, given] = match;
@@ -51,9 +61,9 @@ const passDigest = (voter: `0x${string}`, codeHash: Hex, expiry: number) =>
   );
 
 export async function signPass(voter: `0x${string}`, code: string): Promise<Pass> {
-  // a room code is shared by everyone who scans it, so each pass gets its own hash; the contract's one-address-per-hash
-  // rule is there for one-time invite codes, which would hash the code alone
-  const codeHash = keccak256(toBytes(`${code}:${voter.toLowerCase()}`));
+  // an invite hashes alone, so the contract lets only its first voter use it; a room code is shared by everyone who
+  // scans it, so each of its passes gets its own hash
+  const codeHash = keccak256(toBytes(isInviteCode(code) ? code : `${code}:${voter.toLowerCase()}`));
   const expiry = Math.floor(Date.now() / 1000) + PASS_TTL_S;
   const signature = await marketAccount!.signMessage({ message: { raw: passDigest(voter, codeHash, expiry) } });
   return { codeHash, expiry, signature };

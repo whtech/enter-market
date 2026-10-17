@@ -65,6 +65,8 @@ const Home: NextPage = () => {
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string>();
   const [codeInput, setCodeInput] = useState("");
+  // set when the visitor came from /try: the question id of their solo round
+  const [tryId, setTryId] = useState<string>();
 
   useEffect(() => setKey(loadBurnerKey()), []);
 
@@ -106,7 +108,9 @@ const Home: NextPage = () => {
     if (!account) return;
     const saved = loadPass(account.address);
     setPass(saved);
-    const code = new URLSearchParams(window.location.search).get("code");
+    const params = new URLSearchParams(window.location.search);
+    setTryId(params.get("try") ?? undefined);
+    const code = params.get("code");
     if (!saved && code) redeem(code);
   }, [account, redeem]);
 
@@ -167,6 +171,10 @@ const Home: NextPage = () => {
       const hash = await wallet.writeContract({ ...call, gas });
       await publicClient.waitForTransactionReceipt({ hash, pollingInterval: 100 });
       setTap({ option, hash, ms: elapsedSince(started) });
+      // solo round: now that the visitor has voted, the server's bot casts the second vote so the round settles
+      if (tryId === question.id.toString()) {
+        fetch("/api/try", { method: "POST", body: JSON.stringify({ action: "bot", id: tryId }) }).catch(() => {});
+      }
       refresh().catch(() => {});
     } catch (e) {
       const message = e instanceof Error ? e.message.split("\n")[0] : String(e);
@@ -208,12 +216,20 @@ const Home: NextPage = () => {
             {joining ? "Joining…" : "Join"}
           </button>
           {joinError && <p className="text-red-400 text-sm">{joinError}</p>}
+          <a href="/try" className="text-sm text-white/60 underline mt-4">
+            Not in the room? Try it solo
+          </a>
         </div>
       )}
       {pass === undefined && <p className="m-auto text-white/60">{joining ? "Joining…" : "Loading…"}</p>}
       {pass && question === undefined && <p className="m-auto text-white/60">Loading…</p>}
       {pass && question === null && (
-        <p className="m-auto text-center px-6 text-white/60">Waiting for the agent to ask…</p>
+        <div className="m-auto text-center px-8 flex flex-col gap-3 text-white/70">
+          <p className="text-2xl font-bold text-white">You&apos;re in ✓</p>
+          <p>Your phone has a pass and free gas. No wallet to install.</p>
+          <p>When the agent asks, tap an answer. If the majority agrees with you, you split the reward.</p>
+          <p className="text-white/40">Waiting for the agent to ask…</p>
+        </div>
       )}
 
       {pass && question && (
@@ -255,6 +271,9 @@ const Home: NextPage = () => {
               </p>
             )}
             {won && <p className="text-4xl font-bold text-green-400 mt-2">+{formatEther(question.perWinner)} MON 🎉</p>}
+            {open && !answered && !tap && (
+              <p className="text-white/50 text-sm">Tap one. If most people pick the same, you split the reward.</p>
+            )}
             {question.settled && answered && !won && <p className="text-white/60 mt-2">Majority went the other way.</p>}
             {question.settled && !answered && (
               <p className="text-white/60 mt-2">Settled. Wait for the next question.</p>

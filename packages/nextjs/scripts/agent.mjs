@@ -4,10 +4,11 @@
 //
 // Usage: AGENT_PRIVATE_KEY=0x... node scripts/agent.mjs [poster|friday] [--reward 0.1] [--quorum 5] [--ttl 120]
 //        AGENT_PRIVATE_KEY=0x... node scripts/agent.mjs poster --x402 https://enter-market.vercel.app
+//        ... --question "Deploy now?" --options "Yes|No" --result-file out.json   (any decision; used by claude-hook.mjs)
 import { toClientEvmSigner } from "@x402/evm";
 import { registerExactEvmScheme } from "@x402/evm/exact/client";
 import { decodePaymentResponseHeader, wrapFetchWithPayment, x402Client } from "@x402/fetch";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createPublicClient, createWalletClient, formatEther, http, parseEther, parseEventLogs } from "viem";
@@ -34,7 +35,15 @@ const flag = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? args[i + 1] : fallback;
 };
-const scenario = SCENARIOS[args.find(a => SCENARIOS[a]) ?? "poster"];
+const scenario = flag("question")
+  ? {
+      intro: "I hit a decision I should not make alone.",
+      question: flag("question"),
+      options: flag("options", "Yes|No").split("|"),
+      next: choice => `going with "${choice}"`,
+    }
+  : SCENARIOS[args.find(a => SCENARIOS[a]) ?? "poster"];
+const resultFile = flag("result-file");
 const reward = parseEther(flag("reward", "0.1"));
 const quorum = Number(flag("quorum", "5"));
 const ttl = BigInt(flag("ttl", "120"));
@@ -213,6 +222,20 @@ for (;;) {
           (payoutTx ? ` → ${explorer}/tx/${payoutTx}` : " (already paid by the room)"),
       );
       say(`Continuing: ${scenario.next(choice)}`);
+    }
+    if (resultFile) {
+      const winner = q.winner === 255 ? null : q.winner;
+      writeFileSync(
+        resultFile,
+        JSON.stringify({
+          id: id.toString(),
+          question: q.text,
+          choice: winner === null ? null : q.options[winner],
+          winner,
+          counts: q.counts.map(String),
+          contract: address,
+        }),
+      );
     }
     break;
   }

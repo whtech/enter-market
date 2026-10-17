@@ -10,8 +10,21 @@ ENTER Market turns that pause into a paid, onchain market for human judgment.
 3. The tap that reaches the quorum settles the question onchain: the majority answer wins. The market agent then **pays every winner in one batch transaction**, about a second later.
 4. The agent reads the result and keeps working with the crowd's choice.
 
+**Try it without being in the room:** open [enter-market.vercel.app/try](https://enter-market.vercel.app/try) on your phone. You get a one-time invite, the agent asks a question, you tap, a bot casts the second vote, and the winners are paid on Monad testnet. Demo video: [`docs/demo.mp4`](docs/demo.mp4).
+
 ![projector screen](docs/screen.jpg)
 ![phone](docs/phone.jpg)
+
+## A real coding agent asks the room before `git push`
+
+[`packages/nextjs/scripts/claude-hook.mjs`](packages/nextjs/scripts/claude-hook.mjs) is a Claude Code `PreToolUse` hook. When the agent is about to run `git push`, the hook buys the decision over x402, the room votes, and the onchain majority becomes Claude Code's permission decision: `allow`, `deny`, or back to you if nobody answers.
+
+```json
+{ "hooks": { "PreToolUse": [ { "matcher": "Bash", "hooks": [
+  { "type": "command", "command": "node <repo>/packages/nextjs/scripts/claude-hook.mjs", "timeout": 300 } ] } ] } }
+```
+
+We ran it with a real Claude Code session (`claude -p "… Push it to origin"`) on Monad testnet. Claude Code called `git push origin main`, and the hook asked question #3: *"Claude Code wants to run "git push origin main …" in app. Let it?"*. Three phones voted 2 to 1 for "Ship it 🚀", so the push went through. The full record, with every tx hash, is in [`docs/claude-code-hook.md`](docs/claude-code-hook.md).
 
 ## Agents outsourcing to agents, then hiring humans (x402)
 
@@ -49,7 +62,8 @@ AGENT_PRIVATE_KEY=0x... yarn agent friday --x402 https://enter-market.vercel.app
 | --- | --- |
 | Contract (Monad testnet, verified) | [`0xd544a6d7f543930454a848780706afbab6c4e4ac`](https://testnet.monadexplorer.com/address/0xd544a6d7f543930454a848780706afbab6c4e4ac) |
 | Phone page | `/` |
-| Projector page | `/screen` |
+| Projector page | `/screen?key=…` (the key unlocks the rotating room code) |
+| Solo mode for remote judges | [`/try`](https://enter-market.vercel.app/try) |
 
 ## How it is built
 
@@ -71,6 +85,8 @@ agent ◀──────────────────── getQuestio
 - `packages/nextjs/app/api/ask/route.ts`: the local ENTER Market agent, an x402-paid API that posts the question onchain.
 - `packages/nextjs/scripts/agent.mjs`: the demo agent.
 - `packages/nextjs/scripts/bench.mjs`: the benchmark below.
+- `packages/nextjs/scripts/claude-hook.mjs`: the Claude Code hook above.
+- `packages/nextjs/app/try/page.tsx` and `app/api/try/route.ts`: solo mode with a one-time invite and a bot voter.
 - `packages/nextjs/scripts/e2e-gate.mjs`: end-to-end check of the room-code gate, gas drip, onchain pass check, quorum and payout against a local chain (14 checks).
 
 Built with Scaffold-ETH 2, Foundry, Next.js, viem, x402 and Vercel.
@@ -120,7 +136,31 @@ A burner wallet costs nothing, so without a gate one person could vote with a hu
 3. `answer()` checks the pass onchain against the contract's `gatekeeper`. A vote without a pass, or with a pass signed for another address, reverts. The gas drip also only funds burners holding their own pass.
 4. The contract also binds every code hash to the first address that votes with it, so one-time invite codes (hashing the code alone) count exactly once.
 
-What this does and does not stop: voting is limited to people who can see the projector, and passes cannot be shared or replayed. Someone in the room can still script several burners against a live code. Proof of personhood (for example World ID) or one-time printed invite codes would close that, and the contract already supports the second.
+What this does and does not stop: voting is limited to people who can see the projector, and passes cannot be shared or replayed. Someone in the room can still script several burners against a live code.
+
+Roadmap, from what runs today to what closes that gap:
+
+| Stage | Who can vote | One person, one vote? | Status |
+| --- | --- | --- | --- |
+| Room code | anyone who can see the projector | no: someone could script several burners | live |
+| One-time invite codes (`INV…`) | one address per invite, enforced onchain (`passHolder`) | yes, as far as invites go to one person each | live: `/try` hands one to each remote visitor; an event can print them on badges |
+| Proof of personhood | one human, checked before the gatekeeper signs (for example World ID) | yes | next |
+| Reputation | voters weighted by how often they sided with the final majority | rewards honest answers | later |
+
+For a live demo the room code is the right trade-off: everyone can see who is in the room, and the stakes are 0.1 MON.
+
+## Economics
+
+What one decision costs in the demo, and who gets what:
+
+| Step | Paid by | Amount | To |
+| --- | --- | --- | --- |
+| Client agent hires the contractor | client agent | $0.02 USDC (x402) | contractor agent |
+| Contractor hires the local agent | contractor agent | $0.01 USDC (x402), keeps $0.01 | local ENTER Market agent |
+| Reward for the humans | local agent | 0.1 MON, escrowed | the majority, split equally |
+| Gas for a new phone | local agent | 0.05 MON once (covers about two taps) | the voter's burner |
+
+The agent sets the reward, so it prices a decision by what a wrong one would cost it. A coding agent that pushes broken code to main on a Friday costs a person an evening; paying a room a few cents to say "no" is cheap insurance. The local agent earns $0.01 per question and pays MON for the reward and gas. On mainnet it would price the x402 fee to cover those, which an operator can set with `X402_PRICE` and `ASK_REWARD`.
 
 ## Out of scope for the hackathon
 
